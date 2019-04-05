@@ -149,7 +149,7 @@ def check(domainnames_certs, utcnow, expiry_warn=default_expiry_warn):
         sig_alg = cert.get_signature_algorithm()
         if sig_alg.startswith(b'sha1'):
             msgs.append(
-                ('error', "Unsecure signature algorithm %s" % sig_alg))
+                ('error', "Insecure signature algorithm %s" % sig_alg))
         if expires < utcnow:
             msgs.append(
                 ('error', "The certificate has expired on %s." % expires))
@@ -170,22 +170,33 @@ def check(domainnames_certs, utcnow, expiry_warn=default_expiry_warn):
             alt_names.update(
                 x.strip().replace('DNS:', '')
                 for x in str(ext).split(','))
-        alt_names.add(cert.get_subject().commonName)
+        alt_names.add(cert.get_subject().commonName)  # merge the CN from subject with alt_names
+
+        # check if all domain names exactly match the certificate CN + DNS Alternate names
         unmatched = domainnames.difference(alt_names)
         if unmatched:
+            # check also the alternate names
             msgs.append(
                 ('info', "Alternate names in certificate: %s" % ', '.join(
                     sorted(alt_names, key=domain_key))))
             if len(domainnames) == 1:
-                name = cert.get_subject().commonName
-                if name != domain.host:
-                    if name.startswith('*.'):
-                        name_parts = name.split('.')[1:]
-                        name_parts_len = len(name_parts)
-                        domain_host_parts = domain.host.split('.')
-                        if (len(domain_host_parts) - name_parts_len) == 1:
-                            if domain_host_parts[-name_parts_len:] == name_parts:
-                                continue
+                matching_wildcard_name = ""  # wildcard name that matched the specified domain
+                for name in sorted(alt_names, key=domain_key):
+                    if name != domain.host:
+                        if name.startswith('*.'):
+                            name_parts = name.split('.')[1:]
+                            name_parts_len = len(name_parts)
+                            domain_host_parts = domain.host.split('.')
+                            if (len(domain_host_parts) - name_parts_len) == 1:
+                                if domain_host_parts[-name_parts_len:] == name_parts:
+                                    matching_wildcard_name = name
+                                    break  # no need to check additional alt_names
+                if matching_wildcard_name:
+                    msgs.append(
+                        ('info', "The checked domain %s matches the wildcard name %s." % (domain, matching_wildcard_name))
+                    )
+                    continue  # exit the loop for "domain" matching
+                else:
                     msgs.append(
                         ('error', "The requested domain %s doesn't match the certificate domain %s." % (domain, name)))
             else:
@@ -194,7 +205,7 @@ def check(domainnames_certs, utcnow, expiry_warn=default_expiry_warn):
                         sorted(unmatched, key=domain_key))))
         elif domainnames == alt_names:
             msgs.append(
-                ('info', "Alternate names match specified domains."))
+                ('info', "Subject's CN an/or Alternate names match specified domains."))
         else:
             unmatched = alt_names.difference(domainnames)
             msgs.append(

@@ -22,6 +22,12 @@ setup(
     install_requires=[
         'click',
         'pyOpenSSL'],
+    extras_require={
+        'dev': [
+            'pytest',
+            'pytest-flake8'
+        ]
+    },
     entry_points={
         'console_scripts': ['check_tls_certs = check_tls_certs:main']},
     py_modules=['check_tls_certs'])

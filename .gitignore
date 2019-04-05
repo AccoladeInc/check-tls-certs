@@ -5,3 +5,4 @@
 /domains.txt
 /include/
 /lib/
+*.egg-info/
